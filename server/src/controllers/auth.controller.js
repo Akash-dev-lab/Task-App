@@ -2,19 +2,27 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
-// Register a new user
-exports.register = async (req, res) => {
-  const { name, email, password } = req.body;
+// Helper to generate JWT
+const generateToken = (id) => {
+  return jwt.sign({ id }, process.env.JWT_SECRET, {
+    expiresIn: "30d",
+  });
+};
 
+// @desc    Register new user
+// @route   POST /api/auth/register
+// @access  Public
+exports.register = async (req, res) => {
   try {
-    // Validate required fields
+    const { name, email, password } = req.body;
+
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "Please enter all fields" });
+      return res.status(400).json({ message: "Please add all fields" });
     }
 
-    // Check if user already exists
-    let user = await User.findOne({ email });
-    if (user) {
+    // Check if user exists
+    const userExists = await User.findOne({ email });
+    if (userExists) {
       return res.status(400).json({ message: "User already exists" });
     }
 
@@ -22,80 +30,69 @@ exports.register = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create new user
-    user = new User({
+    // Create user
+    const user = await User.create({
       name,
       email,
       password: hashedPassword,
     });
 
-    await user.save();
-
-    res.status(201).json({ message: "User registered successfully" });
+    if (user) {
+      res.status(201).json({
+        _id: user.id,
+        name: user.name,
+        email: user.email,
+        token: generateToken(user._id),
+      });
+    } else {
+      res.status(400).json({ message: "Invalid user data" });
+    }
   } catch (err) {
-    console.error(err.message);
+    console.error("Register Error:", err.message);
     res.status(500).json({ message: "Server Error" });
   }
 };
 
-// Login user
+// @desc    Authenticate a user
+// @route   POST /api/auth/login
+// @access  Public
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
-
   try {
-    // Validate required fields
-    if (!email || !password) {
-      return res.status(400).json({ message: "Please enter all fields" });
-    }
+    const { email, password } = req.body;
 
-    // Check for user
+    // Check for user email
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
+
+    if (user && (await bcrypt.compare(password, user.password))) {
+      res.json({
+        token: generateToken(user._id),
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+        },
+      });
+    } else {
+      res.status(400).json({ message: "Invalid credentials" });
     }
-
-    // Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    // Generate JWT token
-    const payload = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-    };
-
-    jwt.sign(
-      payload,
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" },
-      (err, token) => {
-        if (err) throw err;
-        res.json({
-          token,
-          user: {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-          },
-        });
-      },
-    );
   } catch (err) {
-    console.error(err.message);
+    console.error("Login Error:", err.message);
     res.status(500).json({ message: "Server Error" });
   }
 };
 
-// Get current user
+// @desc    Get user data
+// @route   GET /api/auth/me
+// @access  Private
 exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select("-password");
-    res.json(user);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.status(200).json(user);
   } catch (err) {
-    console.error(err.message);
+    console.error("GetMe Error:", err.message);
     res.status(500).json({ message: "Server Error" });
   }
 };

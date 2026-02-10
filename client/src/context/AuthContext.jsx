@@ -7,19 +7,25 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Check if user is logged in
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
-      if (token) {
-        try {
-          const res = await api.get('/auth/me');
-          setUser(res.data);
-        } catch (err) {
-          localStorage.removeItem('token');
-          setUser(null);
-        }
+      if (!token) {
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      try {
+        const res = await api.get('/auth/me');
+        setUser(res.data);
+      } catch (err) {
+        console.error("Auth Check Failed:", err);
+        localStorage.removeItem('token');
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
     };
 
     checkAuth();
@@ -33,7 +39,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (name, email, password) => {
-    await api.post('/auth/register', { name, email, password });
+    const res = await api.post('/auth/register', { name, email, password });
+    return res.data;
   };
 
   const logout = () => {

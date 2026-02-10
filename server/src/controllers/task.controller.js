@@ -11,16 +11,15 @@ exports.createTask = async (req, res) => {
       return res.status(400).json({ message: 'Title is required' });
     }
 
-    const task = new Task({
+    const task = await Task.create({
       title,
       description,
       user: req.user.id,
     });
 
-    const createdTask = await task.save();
-    res.status(201).json(createdTask);
+    res.status(201).json(task);
   } catch (err) {
-    console.error(err.message);
+    console.error("Create Task Error:", err.message);
     res.status(500).json({ message: 'Server Error' });
   }
 };
@@ -31,9 +30,9 @@ exports.createTask = async (req, res) => {
 exports.getTasks = async (req, res) => {
   try {
     const tasks = await Task.find({ user: req.user.id }).sort({ createdAt: -1 });
-    res.json(tasks);
+    res.status(200).json(tasks);
   } catch (err) {
-    console.error(err.message);
+    console.error("Get Tasks Error:", err.message);
     res.status(500).json({ message: 'Server Error' });
   }
 };
@@ -43,24 +42,26 @@ exports.getTasks = async (req, res) => {
 // @access  Private
 exports.updateTask = async (req, res) => {
   try {
-    const { title, description, status } = req.body;
-
-    // Find task by ID and ensure it belongs to the logged-in user
-    let task = await Task.findOne({ _id: req.params.id, user: req.user.id });
+    const task = await Task.findById(req.params.id);
 
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Update fields if provided
-    if (title) task.title = title;
-    if (description !== undefined) task.description = description;
-    if (status) task.status = status;
+    // Check for user ownership
+    if (task.user.toString() !== req.user.id) {
+      return res.status(401).json({ message: 'User not authorized' });
+    }
 
-    const updatedTask = await task.save();
-    res.json(updatedTask);
+    const updatedTask = await Task.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+
+    res.status(200).json(updatedTask);
   } catch (err) {
-    console.error(err.message);
+    console.error("Update Task Error:", err.message);
     if (err.kind === 'ObjectId') {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -73,16 +74,22 @@ exports.updateTask = async (req, res) => {
 // @access  Private
 exports.deleteTask = async (req, res) => {
   try {
-    // Find task by ID and ensure it belongs to the logged-in user
-    const task = await Task.findOneAndDelete({ _id: req.params.id, user: req.user.id });
+    const task = await Task.findById(req.params.id);
 
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    res.json({ message: 'Task removed' });
+    // Check for user ownership
+    if (task.user.toString() !== req.user.id) {
+      return res.status(401).json({ message: 'User not authorized' });
+    }
+
+    await task.deleteOne();
+
+    res.status(200).json({ id: req.params.id, message: 'Task removed' });
   } catch (err) {
-    console.error(err.message);
+    console.error("Delete Task Error:", err.message);
     if (err.kind === 'ObjectId') {
       return res.status(404).json({ message: 'Task not found' });
     }
