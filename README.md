@@ -20,6 +20,12 @@ A full-stack Task Management application built with the MERN stack (MongoDB, Exp
   - Delete tasks.
 - **Responsive Design**: Mobile-friendly UI styled with Tailwind CSS.
 
+## UI Preview
+
+![Landing Page](client/public/Landing.png)
+
+![Dashboard](client/public/Dashboard.png)
+
 ## API Endpoints
 
 ### Auth
